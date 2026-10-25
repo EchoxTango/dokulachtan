@@ -1,0 +1,32 @@
+app = "dokulachtan-staging"
+primary_region = "fra"
+
+# Build context je vendor/docuseal (upstream Dockerfile); deploy přes `make deploy-staging`.
+
+[env]
+  PORT = "3000"
+  APP_URL = "https://dokulachtan-staging.fly.dev"
+  FORCE_SSL = "true"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/up"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[[mounts]]
+  source = "dokulachtan_stg_restore"
+  destination = "/data/docuseal"

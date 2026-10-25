@@ -1,0 +1,9 @@
+# System-test image: QES test image + chromium pro capybara/cuprite (spec/system/*).
+# Assety (public/packs-test) se do repa kopírují z produkčního image:
+#   podman run --rm docker.io/docuseal/docuseal:latest tar -C /app/public -cf - packs \
+#     | tar -C vendor/docuseal/public -xf - && cp -r public/packs public/packs-test
+FROM dokulachtan-qes-test
+
+RUN apk add --no-cache chromium fontconfig ttf-dejavu
+
+ENV CHROME_BIN=/usr/bin/chromium

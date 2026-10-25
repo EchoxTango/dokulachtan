@@ -1,0 +1,38 @@
+vendor/docuseal/
+.venv/
+test/out/
+test/e2e/data/
+test/e2e/pg_data/
+
+# Lokální secrets a privátní testovací PKI — nikdy do gitu
+.env
+.env.*
+!.env.example
+.env.docuseal
+test/certs-private/
+mobile/android-signer-poc/local.properties
+mobile/android-signer-poc/.gradle/
+mobile/android-signer-poc/build/
+mobile/android-signer-poc/app/build/
+
+# APK build artifact (nahraje se na Fly.io, ne do gitu)
+deploy/apk/*.apk
+
+# SMTP přihlašovací údaje (fly secrets) — staging i produkce
+deploy/smtp*.env
+!deploy/smtp*.env.example
+
+# Běžné lokální artefakty
+*.log
+.DS_Store
+*.sqlite3
+*.db
+*.dump
+*.bak
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Brevo API klíč pro diagnostiku (lokálně, nikdy do repa)
+deploy/brevo*.txt
