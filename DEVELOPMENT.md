@@ -72,19 +72,16 @@ Reporty jdou do `test/out/`. E2E potřebuje `.venv` a klon forku z `make fork-se
 
 | Příkaz | Co dělá |
 |---|---|
-| `make deploy-prod` | produkce `dokulachtan` (`deploy/docuseal/fly.toml`) |
-| `make deploy-staging` | staging `dokulachtan-staging` (`deploy/docuseal/fly.staging.toml`) |
+| `make deploy-prod` | deploy podle `deploy/docuseal/fly.toml` |
+| `make deploy-staging` | deploy podle `deploy/docuseal/fly.staging.toml` |
 | `make smtp-setup` | nahraje `deploy/smtp.env` jako Fly secrets (`APP=` volí prostředí) |
 | `make smtp-check` | ověří, že app vidí SMTP konfiguraci |
 | `make smtp-test` | pošle testovací e-mail (`TO=`) |
 | `make check-public` | ověří, že lokální tajemství nejsou v tracked souborech |
 
-| Prostředí | URL | Konfigurace |
-|---|---|---|
-| produkce | <https://dokulachtan.fly.dev/> | `deploy/docuseal/fly.toml` |
-| staging | <https://dokulachtan-staging.fly.dev/> | `deploy/docuseal/fly.staging.toml` |
-| APK | <https://dokulachtan-download.fly.dev/dokulachtan-signer.apk> | `deploy/apk/` |
-
+Konfigurace prostředí je v `deploy/docuseal/`: `fly.toml` = produkce, `fly.staging.toml` = staging.
+Pro vlastní instanci uprav `app` a `primary_region` v těchto souborech. Stránka s APK je
+v `deploy/apk/`; hotový APK najdeš v [Releases](https://github.com/v1b3coder/dokulachtan/releases/latest).
 Detail nasazení: [docs/09-deployment-flyio.md](docs/09-deployment-flyio.md).
 
 ## Konfigurace
