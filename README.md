@@ -37,7 +37,8 @@ a sleduje stav. Nic dalšího se nezakládá.
 | Co | Kde |
 |---|---|
 | Dokument, e-mail, historie, audit | DocuSeal |
-| Podpis a certifikát | appka v telefonu |
+| Podpis (AdES) | appka v telefonu |
+| Podpis (QES) | čip občanky přes čtečku |
 | Klíč | telefon nebo čip občanky — nikdy na serveru |
 
 ## Dvě úrovně podpisu
