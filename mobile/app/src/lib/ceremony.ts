@@ -27,7 +27,7 @@ export interface CeremonyDeps {
 export interface CeremonyResult {
   completed: QesCompletedPayload;
   level: QesLevel;
-  keyLocation: 'phone_keystore' | 'card';
+  keyLocation: 'phone_keystore' | 'card' | null;
   biometricPrompts: number;
 }
 
@@ -45,6 +45,9 @@ export async function runSigningCeremony(
   levelRequired: QesLevel,
 ): Promise<CeremonyResult> {
   const session = await deps.api.getSession();
+  if (session.state === 'completed') {
+    return { completed: session, level: session.level, keyLocation: null, biometricPrompts: 0 };
+  }
   const required = session.level_required ?? levelRequired;
   const configuration = deps.configuration ?? { hasKey: true, hasReader: false, readerReady: false };
   const selection = selectSigner(required, configuration);

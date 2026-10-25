@@ -27,6 +27,7 @@ import type { QesSessionPayload } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
 const ERROR_TEXT: Record<string, string> = {
+  invalid_submission: 'Chybí údaj pro dokončení uložení dokumentu. Otevřete původní odkaz.',
   document_mismatch: 'Dokument neodpovídá údajům k podpisu. Podpis byl odmítnut. Vyžádejte nový odkaz.',
   user_cancelled: 'Podpis byl zrušen.',
   pdf_viewer_unavailable: 'PDF se nepodařilo otevřít. Nainstalujte prohlížeč PDF a zkuste to znovu.',
@@ -78,6 +79,10 @@ export default function SignScreen() {
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [done, setDone] = useState<{ level: string; digest: string } | null>(null);
+  const [submissionCompleted, setSubmissionCompleted] = useState(false);
+  const [savingSubmission, setSavingSubmission] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const submissionLock = useRef(false);
   const [signing, setSigning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -150,6 +155,29 @@ export default function SignScreen() {
     return new PdfApi(await resolveSigningOrigin(platformVaultDeps().storage, server), settings?.apiToken ?? '');
   }, [server]);
 
+  const finishSubmission = useCallback(async () => {
+    if (submissionLock.current) return;
+    if (!submitterId || !Number.isSafeInteger(submitterId) || submitterId <= 0) {
+      setSubmissionError('invalid_submission');
+      return;
+    }
+    const currentGeneration = generation.current;
+    submissionLock.current = true;
+    setSavingSubmission(true);
+    setSubmissionError(null);
+    try {
+      await (await pdfApi()).completeSubmission(submitterId);
+      if (currentGeneration === generation.current) setSubmissionCompleted(true);
+    } catch (err) {
+      if (currentGeneration === generation.current) {
+        setSubmissionError(err instanceof PdfApiError || err instanceof SigningOriginError ? err.code : 'network');
+      }
+    } finally {
+      submissionLock.current = false;
+      setSavingSubmission(false);
+    }
+  }, [submitterId, pdfApi]);
+
   useEffect(() => {
     if (!token) {
       setError('unknown_token');
@@ -158,6 +186,9 @@ export default function SignScreen() {
     }
 
     let active = true;
+    setDone(null);
+    setSubmissionCompleted(false);
+    setSubmissionError(null);
     setSession(null);
     setServerUrl(null);
     setError(null);
@@ -168,6 +199,10 @@ export default function SignScreen() {
         if (active) {
           setServerUrl(origin);
           setSession(payload);
+          if (payload.state === 'completed') {
+            setDone({ level: payload.level, digest: payload.document_digest });
+            if (isPdfFlow) void finishSubmission();
+          }
         }
       })
       .catch((err) => {
@@ -176,7 +211,7 @@ export default function SignScreen() {
         setErrorDetail(err instanceof Error ? err.message : null);
       });
     return () => { active = false; };
-  }, [token, server]);
+  }, [token, server, isPdfFlow, finishSubmission]);
 
   // Po návratu z wizardu S10 je chyba „chybí certifikát“ vyřešená nebo zastaralá —
   // obrazovka nabídne znovu „Podepsat“ (docs/17).
@@ -235,9 +270,7 @@ export default function SignScreen() {
 
       // Přímý podpis: dokončit submission v DocuSealu, aby vzniklo finální
       // PDF + auditní stránka ve složce „Direct signing“ (docs/15 § 5).
-      if (isPdfFlow && submitterId) {
-        await (await pdfApi()).completeSubmission(submitterId);
-      }
+      if (isPdfFlow) await finishSubmission();
     } catch (err) {
       if (err instanceof SigningOriginError || err instanceof CeremonyError || err instanceof VaultError || err instanceof QesApiError) {
         setError(err.code);
@@ -250,7 +283,7 @@ export default function SignScreen() {
       signingLock.current = false;
       setSigning(false);
     }
-  }, [token, server, serverUrl, session, isPdfFlow, submitterId, pdfApi, confirmDocument]);
+  }, [token, server, serverUrl, session, isPdfFlow, finishSubmission, confirmDocument]);
 
   // Finální PDF stáhneme nativně do cache; obě akce (uložit / sdílet) jdou z něj.
   const finalPdf = useCallback(async () => {
@@ -361,7 +394,15 @@ export default function SignScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {done ? (
+      {done && isPdfFlow && !submissionCompleted ? (
+        <>
+          <Text style={styles.title}>Podpis je hotový, zbývá dokončit uložení</Text>
+          <Text style={styles.muted}>Podpis se nebude opakovat. Dokončete uložení dokumentu do DocuSealu.</Text>
+          {submissionError ? <Text style={styles.error}>{ERROR_TEXT[submissionError] ?? submissionError}</Text> : null}
+          <PrimaryButton title={savingSubmission ? 'Dokončuji uložení…' : 'Dokončit uložení'} onPress={finishSubmission} disabled={savingSubmission} />
+          <TextButton title="Zavřít" onPress={() => router.replace('/')} />
+        </>
+      ) : done ? (
         <>
           <Text style={styles.title}>Podepsáno ({done.level.toUpperCase()})</Text>
           <Text style={styles.muted}>
@@ -401,7 +442,7 @@ export default function SignScreen() {
         <>
           <Text style={styles.title}>{session.document_name ?? 'Dokument'}</Text>
           <Text style={styles.muted}>Podepisuje: {session.signer_name}</Text>
-          <Text style={styles.label}>Úroveň: {levelLabel(session.level_required)}</Text>
+          <Text style={styles.label}>Úroveň: {levelLabel(session.level_required ?? 'ades')}</Text>
           {error ? <Text style={styles.error}>{ERROR_TEXT[error] ?? error}</Text> : null}
           {errorDetail ? <Text style={styles.detail}>{errorDetail}</Text> : null}
           {reviewPdf ? (

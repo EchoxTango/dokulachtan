@@ -95,3 +95,31 @@ it('preserves mismatch error even if abort cannot reach the server', async () =>
   api.postAbort.mockRejectedValue(new Error('offline'));
   await expect(runSigningCeremony(deps, 'ades')).rejects.toMatchObject({ code: 'document_mismatch' });
 });
+
+it('resumes a completed session without touching the key, certificate or review', async () => {
+  const { deps, api, confirmDocument } = setup();
+  const completed = { state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, signed_pdf_sha256: 'hash' };
+  api.getSession.mockResolvedValue(completed);
+  deps.configuration = { hasKey: false, hasReader: false, readerReady: false };
+  await expect(runSigningCeremony(deps, 'ades')).resolves.toMatchObject({
+    completed, level: 'ades', biometricPrompts: 0, keyLocation: null,
+  });
+  expect(unlock).not.toHaveBeenCalled();
+  expect(api.postCertificate).not.toHaveBeenCalled();
+  expect(api.getDocument).not.toHaveBeenCalled();
+  expect(confirmDocument).not.toHaveBeenCalled();
+  expect(api.postComplete).not.toHaveBeenCalled();
+});
+
+it('recovers a lost completion response with no second signature or unlock', async () => {
+  const { deps, api } = setup();
+  api.postComplete.mockImplementationOnce(async () => {
+    api.getSession.mockResolvedValue({ state: 'completed', level: 'ades', document_digest: 'digest', session_id: 1, signed_pdf_sha256: 'hash' });
+    throw new Error('lost response');
+  });
+  await expect(runSigningCeremony(deps, 'ades')).rejects.toThrow('lost response');
+  await expect(runSigningCeremony(deps, 'ades')).resolves.toMatchObject({ biometricPrompts: 0 });
+  expect(unlock).toHaveBeenCalledTimes(1);
+  expect(api.postCertificate).toHaveBeenCalledTimes(1);
+  expect(api.postComplete).toHaveBeenCalledTimes(1);
+});

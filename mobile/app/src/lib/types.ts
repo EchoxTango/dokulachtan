@@ -2,9 +2,12 @@
 
 export type QesLevel = 'none' | 'ades' | 'qes';
 
-export interface QesSessionPayload {
+export type QesSessionPayload = QesPendingSessionPayload
+  | (QesCompletedPayload & Partial<Omit<QesPendingSessionPayload, 'state'>>);
+
+export interface QesPendingSessionPayload {
   session_id: number;
-  state: string;
+  state: 'created' | 'app_opened' | 'awaiting_signature' | 'embedding' | 'failed' | 'expired';
   provider: string;
   document_name: string | null;
   signer_name: string | null;
@@ -49,7 +52,7 @@ export interface QesValidationReport {
 }
 
 export interface QesCompletedPayload {
-  state: string;
+  state: 'completed';
   session_id: number;
   level: QesLevel;
   document_digest: string;
