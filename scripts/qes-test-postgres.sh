@@ -3,8 +3,7 @@
 #
 #   ./scripts/qes-test-postgres.sh [rspec argumenty…]
 #
-# Používá podman síť se statickou IP (stejný důvod jako test/e2e/compose.yml:
-# CNI bez DNS pluginu), takže kontejner najde DB na pevné adrese.
+# Používá podman síť se statickou IP (CNI bez DNS pluginu), takže kontejner najde DB na pevné adrese.
 # Výsledek se ukládá do test/out/qes-test-postgres-report.txt.
 set -euo pipefail
 

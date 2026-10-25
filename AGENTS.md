@@ -179,7 +179,7 @@ docs/           průzkum, návrh, e2e testy, fork workflow, deployment
  02-navrh.md              širší návrh (překonáno rozhodnutím 04)
  03-architektura-sidecar.md  sidecar varianta (překonáno 04)
  04-architektura-fork.md  rozhodnutí: fork, varianty A/B, Qes::Providers
- 05-e2e-testovani.md     certifikáty, CLI validátory, matice, důkazy
+ 05-e2e-testovani.md     certifikáty, CLI validátory, matice, důkazy (historické)
  06-design-lidsky.md      design bez odborných termínů
  07-pred-implementaci.md  checklist rozhodnutí (Expo, fork, provoz)
  08-fork-workflow.md      větev dokulachtan, rebase pravidla
@@ -196,9 +196,9 @@ docs/           průzkum, návrh, e2e testy, fork workflow, deployment
  19-overeni-pdf-externi.md  externí ověření PDF přes EU DSS (jen appka, volba providera)
 DESIGN.md       aplikační design (co a proč)
 SPEC.md         detailní specifikace odvozená z DESIGN (model, API, obrazovky, testy)
-PLAN.md         implementační plán (fáze P0–P7 s verifikací)
+PLAN.md         implementační plán (fáze P0–P8 s verifikací)
 scripts/        nástroje a testy (viz `make help`)
-mobile/         Android PoC (Expo appka vznikne zde)
+mobile/         Expo appka (Android first, iOS připravený)
 test/           fixtures, certy, reporty
 vendor/docuseal  lokální klon forku (gitignored, pin = HEAD forku v vendor/docuseal.rev); fork repo
                  https://github.com/v1b3coder/docuseal (větev dokulachtan)
@@ -209,8 +209,6 @@ vendor/docuseal  lokální klon forku (gitignored, pin = HEAD forku v vendor/doc
 ```bash
 make venv        # .venv (pyHanko + podman-compose)
 make verify      # fixtures + validace + negativní/LTV scénáře
-make e2e         # DocuSeal stack + API flow + validace
-make mobile-poc  # Android PoC (telefon podepíše digest)
 make fork-setup  # klon + větev dokulachtan + skeleton
 make qes-test     # RSpec forku na SQLite (celá sada kromě dashboard specu)
 make qes-test-qes  # jen QES vrstva (rychlá smyčka)
@@ -231,10 +229,13 @@ make qes-app-test # Jest testy appky (vault, P12, signer, API)
 make qes-app-typecheck # TypeScript kontrola appky
 ```
 
+Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPMENT.md).
+
 ## Stav
 
 - [x] Discovery (landscape, rozhodnutí A/B/Expo, fork `dokulachtan`)
-- [x] Verifikace (toolchain, DocuSeal baseline, negativní/LTV, mobile PoC)
+- [x] Verifikace (toolchain, DocuSeal baseline, negativní/LTV, mobile PoC) — baseline e2e a PoC
+      byly 2026-10-25 odstraněny, nahradily je `make qes-e2e*` a `make qes-test-qes`
 - [x] **Detailní specifikace a plán implementace** — [SPEC.md](SPEC.md), [PLAN.md](PLAN.md)
 - [x] Staging deployment na Fly.io (varianta A): <https://dokulachtan.fly.dev/>
 - [x] **Audit DESIGN/SPEC** — nálezy B1–B6 opravené v DESIGN/SPEC/PLAN + `docs/11-audit-design-spec.md`

@@ -2,6 +2,11 @@
 
 Datum: 2026-10-14
 
+> **Historický dokument.** Zachycuje ověření před implementací forku. Nástroje baseline e2e
+> (`scripts/e2e.sh`, `scripts/e2e_api.py`, `test/e2e/`) a Android PoC (`scripts/mobile_poc.py`)
+> byly 2026-10-25 odstraněny; nahradily je `make qes-e2e*` a `make qes-test-qes`.
+> Aktuální testovací smyčka je v [DEVELOPMENT.md](../DEVELOPMENT.md).
+
 Cíl: mít garanci, že to, co **konzumujeme** (cizí podepsaná PDF) i co **produkujeme**
 (naše PAdES/QES), je kompatibilní s ekosystémem — a mít to reprodukovatelně v repu.
 
@@ -100,7 +105,7 @@ Poznámky k důkazu:
 - **B-LT/B-LTA** se self-signed certem selže (chybí OCSP/CRL) — proto se pro LTV testy používají
   I.CA test certifikáty s test OCSP/CRL (T3/T6).
 
-### 5.1 DocuSeal API e2e (spuštěno 2026-10-14)
+### 5.1 DocuSeal API e2e (spuštěno 2026-10-14, historicky)
 
 ```
 $ make e2e
@@ -158,12 +163,13 @@ Poznámky:
 Pro produkční důvěru validovat s `--trust <I.CA test root>` (testovací certy) nebo s `--eutl`
 (trust z EU trusted listů); nikdy netrustovat „vše“.
 
-### 5.4 Mobile PoC (varianta B) — spuštěno 2026-10-15
+### 5.4 Mobile PoC (varianta B) — spuštěno 2026-10-15 (historicky, nástroj odstraněn)
 
-Ověřeno na skutečném Android emulátoru (Android 15, x86_64, AVD `qes_poc`):
+Ověřeno na skutečném Android emulátoru (Android 15, x86_64, AVD `qes_poc`). Dnes stejný tok
+ověřuje `make qes-e2e` kódem appky (`mobile/app/src/lib`); `make mobile-poc` už neexistuje.
 
 ```
-$ make mobile-poc
+$ # historicky: make mobile-poc (dnes make qes-e2e)
 1. TBS PDF: mobile-tbs.pdf, digest (SHA-256 ByteRange): 4f3a...
 2. Android app (telefon): OK alias=... subject=CN=Test Signer,O=Dokulachtan Test,C=CZ
    digestInfoBytes=51 signatureBytes=256
@@ -233,12 +239,10 @@ scripts/make_test_pki.sh     # self-signed cert + PKCS#12 (heslo: test)
 scripts/make_test_pdf.py      # minimální jednostránkové PDF
 scripts/make_fixtures.sh     # PAdES-BES, PAdES-B-T, detached CMS
 scripts/validate.sh          # qpdf + pdfsig + pyHanko + openssl → test/out/report.txt
-scripts/e2e.sh               # DocuSeal stack + účet/token/šablona + API test
-scripts/e2e_api.py           # API flow + validace → test/out/e2e-report.txt
-test/e2e/compose.yml        # DocuSeal + Postgres (statické IP, CNI bez DNS)
+scripts/qes_e2e.py           # fork + podpis kódem appky → test/out/qes-e2e-report.txt
 test/certs/                  # signer.{key.pem,cert.pem,p12}
 test/fixtures/               # input.pdf, signed-pades-bes.pdf, signed-pades-t.pdf, sig-detached.der
-test/out/                     # report.txt, e2e-report.txt, e2e-document-0.pdf (důkazy)
+test/out/                    # reporty a podepsaná PDF (důkazy)
 vendor/docuseal/             # klon forku DocuSealu (pin = HEAD forku, gitignored)
 vendor/docuseal.rev          # pinovaný commit forku (HEAD)
 ```
@@ -252,17 +256,17 @@ make venv
 # 2. fixtures a validace signeru
 make fixtures && make validate
 
-# 3. celý e2e: DocuSeal stack + API + validace
-make e2e
+# 3. celý e2e: fork + podpis kódem appky + validace
+make qes-e2e
 
-# 4. DocuSeal (upstream baseline) ručně přes podman
+# 4. DocuSeal fork ručně přes podman
 make docuseal-up   # → http://localhost:3000
 ```
 
 ## 8. CI
 
 - `make fixtures` + `make validate` na každý commit (rychlý, bez sítě — TSA vypnout nebo mock).
-- `make e2e` v separátním jobu (DocuSeal stack, bez sítě stačí lokálně).
+- `make qes-e2e` v separátním jobu (fork + podpis kódem appky).
 - S TSA: oddělený job s `TSA_URL` (I.CA test TSA) a timeoutem.
 - Matice: `pdfsig` + `pyhanko` + `qpdf` jako povinné; DSS/ETSI/Adobe jako noční job.
 - **EU DSS API** (`make qes-eu-dss-verify`) je volitelný nezávislý compliance check
