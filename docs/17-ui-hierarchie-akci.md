@@ -98,7 +98,12 @@ Důsledky, které lze v appce vidět:
 
 1. Vysvětlení (beze změny).
 2. Label „Soubor PKCS#12“ + **sekundární** „Vybrat soubor“ / po výběru název souboru a „Změnit“.
-3. Label „Heslo“ + pole.
+3. Label „Heslo“ + pole s ikonou oka uvnitř pole: heslo je zamaskované, klepnutím na oko
+   se zobrazí (kontrola překlepů u složitého hesla), dalším klepnutím zase skryje.
+   Pole má vypnutý autocorrect a autoCapitalize — při přepnutí masky na iOS jinak
+   může zahodit napsaný text. Obrazovka má `keyboardShouldPersistTaps="handled"`,
+   aby oko zabralo i na první klepnutí, když je otevřená klávesnice (jinak ScrollView
+   první klepnutí spolkne na její zavření).
 4. **Primární** „Importovat“ — vypnuté, dokud není vybraný soubor.
 5. Chyba těsně nad primární akcí.
 6. Oddělovač + „Nebo“ + tlumené „Testovací certifikát je jen pro staging — nemá důvěryhodný
@@ -170,7 +175,8 @@ po úspěchu Stáhnout a sdílet (plné) + Zavřít (plné).
 - **Stav podpisu:** **primární** „Podepsat“, **terciární** „Zrušit“.
 - **Chyba `certificate_missing` / `no_signer`:** **primární** „Nastavit podepisování“ → S10
   (testovací certifikát se nabízí až tam), **terciární** „Zavřít“.
-- **Hotovo:** **primární** „Stáhnout a sdílet“, **sekundární** „Zavřít“.
+- **Hotovo:** **primární** „Stáhnout“ (uložit do telefonu), **sekundární** „Sdílet“ (share sheet),
+  **terciární** „Zavřít“; po návratu ze share sheetu jdou obě akce znovu.
 
 ### S8 Připojení čtečky
 
@@ -241,3 +247,18 @@ nerozlišené štítky share sheetu „Podepsat PDF“ / „Ověřit PDF“ (obo
 - Chyby se zobrazují těsně nad akcí, kterou opravují (S11/S12); „Zrušit“/„Zavřít“ jsou terciární.
 - Aktualizováno SPEC § 9.1, DESIGN § 5.1 a docs/16 (S1, S15).
 - Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (60/60).
+
+## 9. Realizace (2026-10-25)
+
+- **S4 dokončený přímý podpis:** **primární** „Stáhnout“ (uložit do telefonu), **sekundární**
+  „Sdílet“ (share sheet), **terciární** „Zavřít“ — opravuje N15.
+- Stažení finálního PDF jde nativně do cache (`File.downloadFileAsync`), ne přes blob v JS.
+- „Stáhnout“ na Androidu 10+ ukládá přes `MediaStore` do `Download/Dokulachtan/`, na starším
+  Androidu přes SAF a na iOS přes výběr složky (Soubory) — bez share sheetu.
+- „Sdílet“ na Androidu otevírá vlastní modul `DokulachtanShare` (hlavní vlákno, promise hned),
+  takže tlačítka po návratu ze sheetu zůstávají použitelná (opravuje N18 pro S4).
+- Po uložení se nabídne „**Otevřít**“ (systémový prohlížeč PDF) a „**Uložit jinam…**“ (SAF picker);
+  vybranou složku si appka zapamatuje a příště do ní ukládá přímo (výchozí zůstává Downloads).
+- Ověřeno: `make qes-app-typecheck`, `make qes-app-test` (99/99), ručně na emulátoru
+  (uložení do `Download/Dokulachtan/`, uložení do Documents + zapamatování, otevření v Drive PDF Viewer,
+  share sheet, druhé sdílení i uložení po back).

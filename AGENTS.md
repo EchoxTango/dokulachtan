@@ -137,9 +137,10 @@ do forku se předávají přes `--config` (`make deploy-prod` / `make deploy-sta
   Detail: `docs/15-primy-podpis-pdf.md` § 8.
 - **Testovací APK:** <https://dokulachtan-download.fly.dev/dokulachtan-signer.apk> (Fly app
   `dokulachtan-download`, `deploy/apk/`; obsahuje testovací certifikát a stub čtečky).
-  Verze v repu **1.3.4** (versionCode 10304, debug podpis `fac61745…3b9c`; na Fly **1.3.3**) — **přímý podpis PDF
+  Verze v repu **1.3.6** (versionCode 10306, debug podpis `fac61745…3b9c`; na Fly **1.3.6**) — **přímý podpis PDF
   nativním tokem DocuSealu** („Podepsat PDF“ → náhled → klepnutí → podpis → dokument ve složce
-  „Direct signing“, stažení/sdílení), **sdílení PDF do appky** (Android share sheet „Podepsat PDF“)
+  „Direct signing“, „Stáhnout“ (uložit do telefonu, volitelně jinam) / „Otevřít“ / „Sdílet“),
+  **sdílení PDF do appky** (Android share sheet „Podepsat PDF“)
   a **open intent** („Ověřit PDF“ z file manageru / e-mailu) → obojí S14 s volbou
   „Podepsat PDF“ / „Ověřit PDF“; **ověření PDF** (S14/S15, uložení do „Verified documents“),
   **externí ověření přes EU DSS** (jen appka, PDF se posílá na servery EK).
@@ -384,6 +385,27 @@ Plný seznam cílů včetně e2e, stagingu a deploye: [DEVELOPMENT.md](DEVELOPME
       4 kritické nálezy (K1 DocTS `modified`, K2 mrtvý `QES_TSA_REQUIRED`, K3 500 u malformed cert,
       K4 VRI klíč), ~215 řádků mrtvého kódu, ~200 řádků duplicit; `make qes-test-qes` 125/0,
       `make qes-verify-e2e` **červené** (vlastní LTA PDF → `verdict: invalid`, `modified: true`)
+- [x] **Stáhnout / Sdílet u přímého podpisu PDF (2026-10-25):** `docs/15` § 6 a `docs/17` § 9 —
+      finální PDF se stahuje nativně (`File.downloadFileAsync`), „Stáhnout“ ukládá do telefonu
+      (`MediaStore` → `Download/Dokulachtan/` na Androidu 10+, SAF na starším, Soubory na iOS) a „Sdílet“
+      otevírá share sheet; nový lokální modul `modules/dokulachtan-share` startuje chooser na hlavním
+      vlákně a promise resolve hned (bez visícího promise a bez NPE, expo/expo#51164), po návratu ze
+      sheetu se stav tlačítek resetuje (`AppState`), takže jde akci spustit znovu; chyby akcí mají vlastní
+      kódy (`download_failed`, `save_failed`, `share_failed`, `sharing_unavailable`);
+      po uložení jde PDF **otevřít** v systémovém prohlížeči (`ACTION_VIEW`) a **„Uložit jinam…“**
+      otevře SAF picker, vybranou složku si appka zapamatuje (SecureStore) a příště ukládá přímo tam
+      (výchozí zůstává `Download/Dokulachtan/`); `make qes-app-test` 99/99,
+      `make qes-app-typecheck` zelené, ručně na emulátoru (uložení do `Download/Dokulachtan/` i do
+      Documents se zapamatováním, otevření v Drive PDF Viewer, share sheet, druhé sdílení i uložení po back)
+- [x] **Zobrazit heslo při importu klíče (2026-10-25):** pole hesla v S2 má uvnitř inputu ikonu oka
+      (kreslená Views, appka nemá knihovnu ikon) — klepnutím se heslo odmaskuje pro kontrolu překlepů,
+      dalším klepnutím zase skryje; ikona i `accessibilityLabel` se přepínají („Zobrazit/Skrýt heslo“),
+      pole má vypnutý autocorrect/autoCapitalize, aby přepnutí masky nezahodilo text; obrazovka má
+      `keyboardShouldPersistTaps="handled"`, aby oko zabralo na první klepnutí i s otevřenou
+      klávesnicí (jinak ScrollView první klepnutí spolkne); `make qes-app-test`
+      99/99, `make qes-app-typecheck` zelené, ručně na emulátoru (maskované → „Tajne123“ viditelné →
+      znovu maskované, text zůstal) a na telefonu (S23, APK 1.3.6 nainstalováno přes adb):
+      maskované → klepnutí na oko → „ahoj“ viditelné → klepnutí → maskované, text zůstal
 
 ## Pravidla
 
