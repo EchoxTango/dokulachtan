@@ -30,6 +30,7 @@ export function preparedPdf(algorithm = 'sha256') {
   pdf = pdf.replace(rangePlaceholder, range.map((n) => String(n).padStart(10, '0')).join(' '));
   const bytes = Buffer.from(pdf, 'binary');
   const covered = Buffer.concat([bytes.subarray(0, start), bytes.subarray(end)]);
+  // CMS messageDigest používá algoritmus session; document_digest je vždy SHA-256.
   const digest = createHash(algorithm).update(covered).digest('binary');
   const prepared: QesCertificatePayload = {
     data_to_sign: signedAttrs(digest),

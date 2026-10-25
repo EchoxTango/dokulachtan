@@ -259,7 +259,13 @@ export class PdfApi {
 
   // Dokončení submissionu: DocuSeal vygeneruje finální PDF a auditní stránku.
   async completeSubmission(submitterId: number): Promise<void> {
-    await this.request('PUT', `/api/submitters/${submitterId}`, { completed: true });
+    try {
+      await this.request('PUT', `/api/submitters/${submitterId}`, { completed: true });
+    } catch (err) {
+      // Odpověď prvního PUT se mohla ztratit; dokumenty pak načte downloadDocument.
+      if (!(err instanceof PdfApiError) || err.status !== 422
+        || err.code !== 'Submitter has already completed the submission.') throw err;
+    }
   }
 
   // Finální PDF z DocuSealu (podepsané PDF, nikoli auditní stránka).

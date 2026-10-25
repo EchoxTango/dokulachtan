@@ -29,6 +29,17 @@ const document = {
 };
 
 describe('PdfApi', () => {
+  it.each([
+    [422, 'Signed field values cannot be changed'],
+    [401, 'Submitter has already completed the submission.'],
+    [500, 'Submitter has already completed the submission.'],
+  ])('preserves unrelated completion errors (%s, %s)', async (status, error) => {
+    const fetchImpl = jest.fn().mockResolvedValue(jsonResponse({ error }, status));
+    const api = new PdfApi('https://server', 'token', { fetchImpl });
+    await expect(api.completeSubmission(42)).rejects.toMatchObject({ status, code: error });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('uploads the PDF with the API token and returns the template', async () => {
     const calls: { url: string; token: string | null; body: BodyInit | null | undefined }[] = [];
     const api = new PdfApi('http://server/', 'secret', {

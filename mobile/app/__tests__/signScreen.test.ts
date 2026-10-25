@@ -2,6 +2,7 @@ import React from 'react';
 import { QesApi } from '../src/lib/api';
 import { PdfApi } from '../src/lib/pdfApi';
 import { runSigningCeremony } from '../src/lib/ceremony';
+import { sharePdf } from '../src/lib/pdfShare';
 import SignScreen from '../app/sign';
 
 const { create, act } = require('react-test-renderer');
@@ -60,5 +61,42 @@ it('opens a completed link directly as success and finishes only saving', async 
   expect(screen.root.findByProps({ title: 'Stáhnout a sdílet' })).toBeTruthy();
   expect(complete).toHaveBeenCalledTimes(1);
   expect(runSigningCeremony).not.toHaveBeenCalled();
+  await act(async () => screen.unmount());
+});
+
+it.each([false, true])('recovers an already completed submission (reopen: %s) and shares its PDF', async (reopen) => {
+  if (reopen) {
+    jest.mocked(QesApi.prototype.getSession).mockResolvedValue({
+      state: 'completed', session_id: 1, level: 'ades', document_digest: 'digest', signed_pdf_sha256: 'hash',
+    });
+  }
+  const fetchMock = jest.spyOn(global, 'fetch');
+  if (!reopen) fetchMock.mockRejectedValueOnce(new Error('response lost'));
+  fetchMock
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Submitter has already completed the submission.' }), { status: 422 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ documents: [{ name: 'contract', url: 'https://server/final.pdf' }] })))
+    .mockResolvedValueOnce(new Response(new Uint8Array([37, 80, 68, 70])));
+  const complete = jest.spyOn(PdfApi.prototype, 'completeSubmission');
+  let screen: ReturnType<typeof create>;
+  await act(async () => { screen = create(React.createElement(SignScreen)); });
+  if (!reopen) {
+    await act(async () => { await screen.root.findByProps({ title: 'Zkontrolovat dokument' }).props.onPress(); });
+    expect(screen.root.findAllByProps({ title: 'Stáhnout a sdílet' })).toHaveLength(0);
+    await act(async () => { await screen.root.findByProps({ title: 'Dokončit uložení' }).props.onPress(); });
+  }
+  expect(screen.root.findAllByProps({ title: 'Dokončit uložení' })).toHaveLength(0);
+  expect(JSON.stringify(screen.toJSON())).toContain('Podepsáno (');
+  expect(JSON.stringify(screen.toJSON())).not.toContain('already completed');
+  expect(JSON.stringify(screen.toJSON())).not.toContain('Chyba připojení');
+  await act(async () => { await screen.root.findByProps({ title: 'Stáhnout a sdílet' }).props.onPress(); });
+  expect(sharePdf).toHaveBeenCalledWith(new Uint8Array([37, 80, 68, 70]), expect.stringContaining('-signed.pdf'));
+  expect(complete).toHaveBeenCalledTimes(reopen ? 1 : 2);
+  expect(runSigningCeremony).toHaveBeenCalledTimes(reopen ? 0 : 1);
+  expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`)).toEqual([
+    ...(!reopen ? ['PUT https://server/api/submitters/42'] : []),
+    'PUT https://server/api/submitters/42',
+    'GET https://server/api/submitters/42',
+    'GET https://server/final.pdf',
+  ]);
   await act(async () => screen.unmount());
 });
