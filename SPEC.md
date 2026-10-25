@@ -1352,7 +1352,7 @@ Konkrétní testovací případy (describe/it) jsou v příloze B (§ 19). Souhr
 | Pořadí | `spec/models/submission_spec.rb` | `submitters_order: random` u QES šablony → vynuceno `preserved` |
 | Well-known | `spec/requests/qes_well_known_spec.rb` | AASA `Content-Type: application/json`, `assetlinks.json` platný JSON |
 
-### 15.2 E2E — `make qes-e2e` (rozšíření `scripts/e2e_api.py`)
+### 15.2 E2E — `make qes-e2e` (nahradil `scripts/e2e_api.py`)
 
 1. Nahraje šablonu s polem `qes` (přes `rails runner`).
 2. Vytvoří submission přes API.

@@ -1,4 +1,4 @@
-.PHONY: venv test-pki test-pki-crl fixtures validate negative e2e e2e-down e2e-logs docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public
+.PHONY: venv test-pki test-pki-crl fixtures validate negative docuseal-up docuseal-down clean qes-test qes-test-images qes-test-assets qes-test-qes qes-js-test qes-test-postgres smtp-setup smtp-check smtp-test smtp-invite-test qes-e2e qes-e2e-two qes-e2e-pdf qes-verify-e2e qes-eu-dss-verify qes-negative qes-staging-e2e qes-staging-same-signer deploy-prod deploy-staging check-public
 
 # Fly app pro SMTP cíle: APP=dokulachtan-staging (staging, default) / APP=dokulachtan (produkce)
 APP ?= dokulachtan-staging
@@ -26,20 +26,6 @@ negative:
 
 # vše: fixtures + validace + negativní scénáře
 verify: fixtures validate negative
-
-# Mobile PoC (varianta B): telefon podepíše digest, server vloží PAdES
-mobile-poc:
-	.venv/bin/python scripts/mobile_poc.py
-
-# E2E: DocuSeal stack + API flow + validace (test/out/e2e-report.txt)
-e2e:
-	./scripts/e2e.sh
-
-e2e-down:
-	.venv/bin/podman-compose -f test/e2e/compose.yml -p e2e down
-
-e2e-logs:
-	podman logs -f e2e_app_1
 
 # fork: klon + remote upstream + větev dokulachtan (pin = HEAD forku v vendor/docuseal.rev)
 fork-setup:

@@ -69,7 +69,7 @@ Cíl: mít místo, kde se dá bezpečně vyvíjet — fork je synchronizovaný, 
       → verify: `make qes-test` = **243 examples, 1 failure** (upstream flake `signing_form_spec.rb:1253`,
       izolovaně projde) a `git -C vendor/docuseal status` čistý; `make qes-test-qes` po P0.3
 - [ ] 0.2b (paritní běh) Postgres 18 jako v upstream CI (`.github/workflows/ci.yml:111-169`):
-      `scripts/qes-test-postgres.sh` (podman síť se statickou IP jako `test/e2e/compose.yml`),
+      `scripts/qes-test-postgres.sh` (podman síť se statickou IP, CNI bez DNS pluginu),
       `PRIMARY_DATABASE_URL=postgresql://postgres:postgres@10.89.98.2:5432/qes_test_db`, celá sada
       → verify: `make qes-test-postgres` = **247 examples, 0 failures** (změřeno 2026-10-16)
 - [ ] 0.3 Přidat `spec/lib/qes/` skeleton a RSpec helper `spec/support/qes_helpers.rb` (test PKCS#12,
