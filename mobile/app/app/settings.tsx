@@ -7,13 +7,13 @@ import { Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, Vi
 import { certificateSummary } from '../src/lib/crypto/vault';
 import { loadPdfApiSettings, savePdfApiSettings } from '../src/lib/pdfApi';
 import { platformVaultDeps } from '../src/lib/platform';
-import { signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
+import { DEFAULT_SERVER_URL, signingOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import { importTestCertificate } from '../src/lib/testCertificate';
 import { PrimaryButton, TextButton } from '../src/ui/buttons';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const [serverUrl, setServerUrl] = useState(process.env.EXPO_PUBLIC_API_URL ?? 'https://dokulachtan.fly.dev');
+  const [serverUrl, setServerUrl] = useState(DEFAULT_SERVER_URL);
   const [apiToken, setApiToken] = useState('');
   const [loaded, setLoaded] = useState<{ serverUrl: string; apiToken: string } | null>(null);
   const [subject, setSubject] = useState<string | null>(null);
