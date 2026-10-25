@@ -41,6 +41,21 @@ export class QesApi implements SessionSource {
     return this.request<QesSessionPayload>('GET', `/qes/sessions/${encodeURIComponent(this.token)}`);
   }
 
+  async getDocument(): Promise<Uint8Array> {
+    const response = await this.fetchImpl(
+      `${this.serverUrl}/qes/sessions/${encodeURIComponent(this.token)}/document`,
+      { method: 'GET', redirect: 'error', headers: { Accept: 'application/pdf', 'X-QES-Protocol': '1' } },
+    );
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new QesApiError(response.status, payload.error ?? 'server_error');
+    }
+    if (response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/pdf') {
+      throw new QesApiError(422, 'document_mismatch');
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   async postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload> {
     return this.request<QesCertificatePayload>(
       'POST',

@@ -1,5 +1,5 @@
 // S4 Žádost o podpis (SPEC § 9.1): deep link → metadata → biometrie → podpis.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -15,6 +15,7 @@ import {
   isPickerCancelled,
   loadSaveFolder,
   openPdf,
+  previewPdf,
   rememberSaveFolder,
   savePdf,
   sharePdf,
@@ -26,6 +27,9 @@ import type { QesSessionPayload } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
 const ERROR_TEXT: Record<string, string> = {
+  document_mismatch: 'Dokument neodpovídá údajům k podpisu. Podpis byl odmítnut. Vyžádejte nový odkaz.',
+  user_cancelled: 'Podpis byl zrušen.',
+  pdf_viewer_unavailable: 'PDF se nepodařilo otevřít. Nainstalujte prohlížeč PDF a zkuste to znovu.',
   foreign_server: 'Odkaz patří jinému serveru než tomu v Nastavení. Podpis byl odmítnut.',
   invalid_server: 'V Nastavení zadejte platnou HTTPS adresu serveru.',
   expired_token: 'Platnost odkazu vypršela. Vyžádejte nový.',
@@ -81,6 +85,56 @@ export default function SignScreen() {
   const [actionDetail, setActionDetail] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedPdf | null>(null);
   const [folder, setFolder] = useState<SaveFolder | null>(null);
+
+  const [reviewPdf, setReviewPdf] = useState<Uint8Array | null>(null);
+  const [reviewOpened, setReviewOpened] = useState(false);
+  const [openingPdf, setOpeningPdf] = useState(false);
+  const consent = useRef<((confirmed: boolean) => void) | null>(null);
+  const signingLock = useRef(false);
+  const generation = useRef(0);
+  const reviewGeneration = useRef(0);
+
+  const confirmDocument = useCallback((pdf: Uint8Array) => new Promise<boolean>((resolve) => {
+    reviewGeneration.current += 1;
+    setReviewOpened(false);
+    setReviewPdf(pdf);
+    consent.current = resolve;
+  }), []);
+
+  const finishReview = useCallback((confirmed: boolean) => {
+    reviewGeneration.current += 1;
+    const resolve = consent.current;
+    consent.current = null;
+    setReviewPdf(null);
+    resolve?.(confirmed);
+  }, []);
+
+  useEffect(() => {
+    setReviewPdf(null);
+    setReviewOpened(false);
+    return () => {
+      generation.current += 1;
+      reviewGeneration.current += 1;
+      consent.current?.(false);
+      consent.current = null;
+    };
+  }, [token, server]);
+
+  const openReview = async () => {
+    if (!reviewPdf || openingPdf) return;
+    const currentReview = reviewGeneration.current;
+    setOpeningPdf(true);
+    try {
+      await previewPdf(reviewPdf);
+      if (currentReview !== reviewGeneration.current) return;
+      setReviewOpened(true);
+      setError(null);
+    } catch {
+      if (currentReview === reviewGeneration.current) setError('pdf_viewer_unavailable');
+    } finally {
+      setOpeningPdf(false);
+    }
+  };
 
   const isPdfFlow = flow === 'pdf';
   // Bez certifikátu nebo podepisujícího vede primární akce do wizardu S10 (docs/17).
@@ -158,20 +212,25 @@ export default function SignScreen() {
   }, []);
 
   const sign = useCallback(async () => {
-    if (!token || !serverUrl) {
+    if (!token || !serverUrl || signingLock.current) {
       return;
     }
 
+    const currentGeneration = generation.current;
+    signingLock.current = true;
     setSigning(true);
     setError(null);
     setErrorDetail(null);
 
     try {
       const result = await runSigningCeremony(
-        { api: new QesApi(await resolveSigningOrigin(platformVaultDeps().storage, server), token), vault: platformVaultDeps() },
+        { api: new QesApi(await resolveSigningOrigin(platformVaultDeps().storage, server), token), vault: platformVaultDeps(),
+          confirmDocument: (pdf) => currentGeneration === generation.current
+            ? confirmDocument(pdf) : Promise.resolve(false) },
         session?.level_required ?? 'ades',
       );
 
+      if (currentGeneration !== generation.current) return;
       setDone({ level: result.level, digest: result.completed.document_digest });
 
       // Přímý podpis: dokončit submission v DocuSealu, aby vzniklo finální
@@ -188,9 +247,10 @@ export default function SignScreen() {
 
       setErrorDetail(err instanceof Error ? err.message : null);
     } finally {
+      signingLock.current = false;
       setSigning(false);
     }
-  }, [token, server, serverUrl, session, isPdfFlow, submitterId, pdfApi]);
+  }, [token, server, serverUrl, session, isPdfFlow, submitterId, pdfApi, confirmDocument]);
 
   // Finální PDF stáhneme nativně do cache; obě akce (uložit / sdílet) jdou z něj.
   const finalPdf = useCallback(async () => {
@@ -344,16 +404,23 @@ export default function SignScreen() {
           <Text style={styles.label}>Úroveň: {levelLabel(session.level_required)}</Text>
           {error ? <Text style={styles.error}>{ERROR_TEXT[error] ?? error}</Text> : null}
           {errorDetail ? <Text style={styles.detail}>{errorDetail}</Text> : null}
-          {needsSetup ? (
+          {reviewPdf ? (
+            <>
+              <Text style={styles.muted}>Otevřete PDF, zkontrolujte jeho obsah a potvrďte podpis.</Text>
+              <SecondaryButton title={openingPdf ? 'Otevírám…' : 'Otevřít přesné PDF'} onPress={openReview} disabled={openingPdf} />
+              <PrimaryButton title="Podepsat tento dokument" onPress={() => finishReview(true)} disabled={!reviewOpened || openingPdf} />
+              <TextButton title="Zrušit podpis" onPress={() => finishReview(false)} />
+            </>
+          ) : needsSetup ? (
             <PrimaryButton title="Nastavit podepisování" onPress={() => router.push('/setup')} />
           ) : (
             <PrimaryButton
-              title={signing ? 'Podepisuji…' : 'Podepsat'}
+              title={signing ? 'Připravuji podpis…' : 'Zkontrolovat dokument'}
               onPress={sign}
               disabled={signing}
             />
           )}
-          <TextButton title="Zrušit" onPress={() => router.replace('/')} />
+          {!reviewPdf ? <TextButton title="Zrušit" onPress={() => router.replace('/')} /> : null}
         </>
       ) : (
         <>

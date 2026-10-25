@@ -2,6 +2,7 @@ package cz.dokulachtan.signer.openpdf
 
 import android.content.ContentResolver
 import android.content.Intent
+import androidx.core.content.FileProvider
 import android.net.Uri
 import android.provider.OpenableColumns
 import expo.modules.kotlin.modules.Module
@@ -59,6 +60,28 @@ class OpenPdfModule : Module() {
         "name" to name,
         "type" to "application/pdf"
       )
+    }
+
+    AsyncFunction("openPdf") { uri: String ->
+      val context = appContext.reactContext ?: error("pdf_viewer_unavailable")
+      val file = File(Uri.parse(uri).path ?: error("invalid_pdf")).canonicalFile
+      val directory = File(context.cacheDir, "reviewed-pdf").canonicalFile
+      require(file.parentFile == directory && file.isFile) { "invalid_pdf" }
+      val contentUri = FileProvider.getUriForFile(context, "${context.packageName}.reviewedpdf", file)
+      val view = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(contentUri, "application/pdf")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      }
+      // Vlastní import PDF nesmí být nabízen jako prohlížeč.
+      val viewers = context.packageManager.queryIntentActivities(view, 0)
+        .filter { it.activityInfo.packageName != context.packageName }
+        .map { info -> Intent(view).setClassName(info.activityInfo.packageName, info.activityInfo.name) }
+      check(viewers.isNotEmpty()) { "pdf_viewer_unavailable" }
+      val chooser = Intent.createChooser(viewers.first(), "Otevřít dokument ke kontrole").apply {
+        putExtra(Intent.EXTRA_INITIAL_INTENTS, viewers.drop(1).toTypedArray())
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(chooser)
     }
 
     OnDestroy {

@@ -77,3 +77,21 @@ describe('QesApi', () => {
     }
   });
 });
+
+it('downloads the exact prepared PDF without following redirects', async () => {
+  const bytes = new Uint8Array([37, 80, 68, 70, 45, 255, 0]);
+  const fetchImpl = jest.fn().mockResolvedValue(new Response(bytes, {
+    headers: { 'Content-Type': 'application/pdf' },
+  }));
+  const api = new QesApi('https://server', 'a/b', { serverUrl: 'https://server', fetchImpl });
+  expect(await api.getDocument()).toEqual(bytes);
+  expect(fetchImpl).toHaveBeenCalledWith('https://server/qes/sessions/a%2Fb/document',
+    expect.objectContaining({ redirect: 'error', headers: expect.objectContaining({ Accept: 'application/pdf' }) }));
+});
+
+it('rejects a document response with the wrong media type', async () => {
+  const api = new QesApi('https://server', 'tok', {
+    serverUrl: 'https://server', fetchImpl: jest.fn().mockResolvedValue(jsonResponse({})),
+  });
+  await expect(api.getDocument()).rejects.toMatchObject({ code: 'document_mismatch' });
+});

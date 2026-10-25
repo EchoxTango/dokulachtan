@@ -9,12 +9,14 @@ import {
   saveToDownloads,
   sharePdf as nativeSharePdf,
 } from '../modules/dokulachtan-share';
+import { openPdf as openReviewedPdf } from '../modules/dokulachtan-open-pdf';
 import {
   downloadPdf,
   isPickerCancelled,
   loadSaveFolder,
   openPdf,
   PdfActionError,
+  previewPdf,
   rememberSaveFolder,
   SaveCancelled,
   savePdf,
@@ -24,10 +26,13 @@ import {
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android', Version: 36 } }));
 
+jest.mock('../modules/dokulachtan-open-pdf', () => ({ openPdf: jest.fn() }));
+
 jest.mock('expo-file-system', () => {
   const downloadFileAsync = jest.fn();
   const pickDirectoryAsync = jest.fn();
   const write = jest.fn();
+  const create = jest.fn();
   const bytes = jest.fn();
 
   class MockFile {
@@ -40,6 +45,8 @@ jest.mock('expo-file-system', () => {
     static downloadFileAsync = downloadFileAsync;
 
     write = write;
+
+    create = create;
 
     bytes = bytes;
   }
@@ -89,6 +96,7 @@ const nativeAvailable = jest.mocked(isNativeShareAvailable);
 const nativeSave = jest.mocked(saveToDownloads);
 const nativeShare = jest.mocked(nativeSharePdf);
 const nativeOpen = jest.mocked(nativeOpenPdf);
+const reviewedOpen = jest.mocked(openReviewedPdf);
 const platform = Platform as { OS: string; Version: number | string };
 
 function file(uri: string, bytes = new Uint8Array([37, 80, 68, 70])): File {
@@ -320,5 +328,23 @@ describe('pdfShare', () => {
 
   it('exposes a code for every action error', () => {
     expect(new PdfActionError('open_failed').code).toBe('open_failed');
+  });
+
+  it('opens the exact bytes from the ceremony in the native PDF viewer', async () => {
+    const bytes = new Uint8Array([37, 80, 68, 70, 45, 255, 0]);
+
+    platform.OS = 'android';
+    reviewedOpen.mockResolvedValue(undefined);
+
+    await previewPdf(bytes);
+
+    expect(write).toHaveBeenCalledWith(bytes);
+    expect(reviewedOpen).toHaveBeenCalledWith(expect.any(String));
+  });
+
+  it('maps a missing PDF viewer to no_pdf_viewer', async () => {
+    reviewedOpen.mockRejectedValue(new Error('pdf_viewer_unavailable'));
+
+    await expect(previewPdf(new Uint8Array([1]))).rejects.toMatchObject({ code: 'no_pdf_viewer' });
   });
 });

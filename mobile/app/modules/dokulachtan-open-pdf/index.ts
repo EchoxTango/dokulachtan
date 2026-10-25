@@ -7,6 +7,7 @@ export interface OpenedPdf {
 }
 
 interface NativeOpenPdfModule {
+  openPdf(uri: string): Promise<void>;
   consumeOpenPdf(): Promise<OpenedPdf | null>;
   copyPdf(uri: string, name: string): Promise<OpenedPdf | null>;
   addListener(event: 'onOpenPdf', listener: (pdf: OpenedPdf) => void): EventSubscription;
@@ -34,4 +35,10 @@ export function addOpenPdfListener(listener: (pdf: OpenedPdf) => void): EventSub
   }
 
   return native.addListener('onOpenPdf', listener);
+}
+
+// Otevření přesné cache kopie pouze pro čtení.
+export async function openPdf(uri: string): Promise<void> {
+  if (!native) throw new Error('pdf_viewer_unavailable');
+  await native.openPdf(uri);
 }

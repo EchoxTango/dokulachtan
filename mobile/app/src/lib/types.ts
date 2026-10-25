@@ -29,6 +29,8 @@ export interface QesCertificateInfo {
 
 export interface QesCertificatePayload {
   data_to_sign: string;
+  byte_range: [number, number, number, number];
+  document_digest: string;
   hash_algorithm: string;
   digest_algorithm_oid: string;
   signature_algorithm: string;
@@ -79,6 +81,8 @@ export interface QesCertificateRequest {
 // implementaci bez změny obřadu.
 export interface SessionSource {
   getSession(): Promise<QesSessionPayload>;
+  getDocument(): Promise<Uint8Array>;
+  postAbort(code: string, message?: string): Promise<{ state: string }>;
   postCertificate(body: QesCertificateRequest): Promise<QesCertificatePayload>;
   postComplete(signatureBase64: string): Promise<QesCompletedPayload>;
 }
