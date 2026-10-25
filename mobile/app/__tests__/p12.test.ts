@@ -65,3 +65,29 @@ it.each([false, true])('rejects an EC signing key at import (encrypted=%s)', (en
   const bytes = p12WithBags(key, [readFileSync(`${__dirname}/fixtures/ecc-ca.crt`, 'utf8')], encrypted);
   expect(() => parseP12(bytes, 'test')).toThrow(expect.objectContaining({ code: 'unsupported_key_type' }));
 });
+
+
+it.each([
+  [true, false, true],
+  [false, true, true],
+  [true, true, true],
+  [false, false, false],
+])('accepts digitalSignature=%s / contentCommitment=%s: %s', (digitalSignature, nonRepudiation, expected) => {
+  const rsa = parseP12(testP12(), TEST_P12_PASSWORD);
+  const key = forge.pki.privateKeyFromPem(rsa.privateKeyPem);
+  const cert = forge.pki.certificateFromPem(rsa.certificatePem);
+  cert.setExtensions([{ name: 'keyUsage', digitalSignature, nonRepudiation, keyEncipherment: true }]);
+  cert.sign(key, forge.md.sha256.create());
+  const bytes = p12WithBags(forge.pki.wrapRsaPrivateKey(forge.pki.privateKeyToAsn1(key)), [forge.pki.certificateToPem(cert)]);
+  expect(parseP12(bytes, 'test').canSign).toBe(expected);
+});
+
+it('allows signing when the certificate does not restrict key usage', () => {
+  const rsa = parseP12(testP12(), TEST_P12_PASSWORD);
+  const key = forge.pki.privateKeyFromPem(rsa.privateKeyPem);
+  const cert = forge.pki.certificateFromPem(rsa.certificatePem);
+  cert.setExtensions([]);
+  cert.sign(key, forge.md.sha256.create());
+  const bytes = p12WithBags(forge.pki.wrapRsaPrivateKey(forge.pki.privateKeyToAsn1(key)), [forge.pki.certificateToPem(cert)]);
+  expect(parseP12(bytes, 'test').canSign).toBe(true);
+});

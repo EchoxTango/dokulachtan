@@ -136,9 +136,9 @@ export function readQcStatements(certificate: forge.pki.Certificate): string[] {
 }
 
 function canSign(certificate: forge.pki.Certificate): boolean {
-  const keyUsage = certificate.getExtension('keyUsage') as { digitalSignature?: boolean } | undefined;
+  const keyUsage = certificate.getExtension('keyUsage') as { digitalSignature?: boolean; nonRepudiation?: boolean } | undefined;
 
-  return keyUsage?.digitalSignature !== false;
+  return !keyUsage || keyUsage.digitalSignature === true || keyUsage.nonRepudiation === true;
 }
 
 export function uint8ToBinary(bytes: Uint8Array): string {
