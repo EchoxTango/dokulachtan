@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { resolveSigningOrigin, SigningOriginError } from '../src/lib/signingOrigin';
 import { QesApi, QesApiError } from '../src/lib/api';
 import { runSigningCeremony, CeremonyError } from '../src/lib/ceremony';
 import { VaultError } from '../src/lib/crypto/vault';
@@ -24,9 +25,9 @@ import { platformVaultDeps } from '../src/lib/platform';
 import type { QesSessionPayload } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
 
-const SERVER_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dokulachtan.fly.dev';
-
 const ERROR_TEXT: Record<string, string> = {
+  foreign_server: 'Odkaz patří jinému serveru než tomu v Nastavení. Podpis byl odmítnut.',
+  invalid_server: 'V Nastavení zadejte platnou HTTPS adresu serveru.',
   expired_token: 'Platnost odkazu vypršela. Vyžádejte nový.',
   used_token: 'Podpis už byl dokončen.',
   unknown_token: 'Neplatný odkaz. Vyžádejte nový.',
@@ -86,14 +87,14 @@ export default function SignScreen() {
   const needsSetup = error === 'certificate_missing' || error === 'vault_decrypt_failed'
     || error === 'key_invalidated' || error === 'no_signer';
   const submitterId = typeof submitter === 'string' && submitter.length > 0 ? Number(submitter) : null;
-  const serverUrl = typeof server === 'string' && server.length > 0 ? server : SERVER_URL;
+  const [serverUrl, setServerUrl] = useState<string | null>(null);
 
   // Klient pro dokončení submissionu a stažení finálního PDF (docs/15 § 5).
   const pdfApi = useCallback(async () => {
     const settings = await loadPdfApiSettings(platformVaultDeps().storage);
 
-    return new PdfApi(settings?.serverUrl ?? serverUrl, settings?.apiToken ?? '');
-  }, [serverUrl]);
+    return new PdfApi(await resolveSigningOrigin(platformVaultDeps().storage, server), settings?.apiToken ?? '');
+  }, [server]);
 
   useEffect(() => {
     if (!token) {
@@ -102,16 +103,26 @@ export default function SignScreen() {
       return;
     }
 
-    const api = new QesApi(serverUrl, token);
+    let active = true;
+    setSession(null);
+    setServerUrl(null);
+    setError(null);
 
-    api
-      .getSession()
-      .then(setSession)
+    resolveSigningOrigin(platformVaultDeps().storage, server)
+      .then(async (origin) => ({ origin, payload: await new QesApi(origin, token).getSession() }))
+      .then(({ origin, payload }) => {
+        if (active) {
+          setServerUrl(origin);
+          setSession(payload);
+        }
+      })
       .catch((err) => {
-        setError(err instanceof QesApiError ? err.code : 'network');
+        if (!active) return;
+        setError(err instanceof QesApiError || err instanceof SigningOriginError ? err.code : 'network');
         setErrorDetail(err instanceof Error ? err.message : null);
       });
-  }, [token, serverUrl]);
+    return () => { active = false; };
+  }, [token, server]);
 
   // Po návratu z wizardu S10 je chyba „chybí certifikát“ vyřešená nebo zastaralá —
   // obrazovka nabídne znovu „Podepsat“ (docs/17).
@@ -147,7 +158,7 @@ export default function SignScreen() {
   }, []);
 
   const sign = useCallback(async () => {
-    if (!token) {
+    if (!token || !serverUrl) {
       return;
     }
 
@@ -157,7 +168,7 @@ export default function SignScreen() {
 
     try {
       const result = await runSigningCeremony(
-        { api: new QesApi(serverUrl, token), vault: platformVaultDeps() },
+        { api: new QesApi(await resolveSigningOrigin(platformVaultDeps().storage, server), token), vault: platformVaultDeps() },
         session?.level_required ?? 'ades',
       );
 
@@ -169,7 +180,7 @@ export default function SignScreen() {
         await (await pdfApi()).completeSubmission(submitterId);
       }
     } catch (err) {
-      if (err instanceof CeremonyError || err instanceof VaultError || err instanceof QesApiError) {
+      if (err instanceof SigningOriginError || err instanceof CeremonyError || err instanceof VaultError || err instanceof QesApiError) {
         setError(err.code);
       } else {
         setError('network');
@@ -179,7 +190,7 @@ export default function SignScreen() {
     } finally {
       setSigning(false);
     }
-  }, [token, serverUrl, session, isPdfFlow, submitterId, pdfApi]);
+  }, [token, server, serverUrl, session, isPdfFlow, submitterId, pdfApi]);
 
   // Finální PDF stáhneme nativně do cache; obě akce (uložit / sdílet) jdou z něj.
   const finalPdf = useCallback(async () => {

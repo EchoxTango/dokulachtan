@@ -37,7 +37,9 @@ export async function loadPdfApiSettings(storage: PdfApiStorage): Promise<PdfApi
   try {
     const parsed = JSON.parse(raw) as PdfApiSettings;
 
-    return parsed.serverUrl && parsed.apiToken ? parsed : null;
+    return typeof parsed.serverUrl === 'string' && parsed.serverUrl.length > 0
+      ? { serverUrl: parsed.serverUrl, apiToken: typeof parsed.apiToken === 'string' ? parsed.apiToken : '' }
+      : null;
   } catch {
     return null;
   }

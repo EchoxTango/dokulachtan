@@ -10,8 +10,8 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe('QesApi', () => {
   it('loads the session metadata', async () => {
     const calls: string[] = [];
-    const api = new QesApi('http://server', 'tok', {
-      serverUrl: 'http://server',
+    const api = new QesApi('https://server', 'tok', {
+      serverUrl: 'https://server',
       fetchImpl: (async (url, init) => {
         calls.push(`${init?.method} ${url}`);
 
@@ -22,12 +22,12 @@ describe('QesApi', () => {
     const session = await api.getSession();
 
     expect(session.level_required).toBe('ades');
-    expect(calls).toEqual(['GET http://server/qes/sessions/tok']);
+    expect(calls).toEqual(['GET https://server/qes/sessions/tok']);
   });
 
   it('posts the certificate and returns data_to_sign', async () => {
-    const api = new QesApi('http://server', 'tok', {
-      serverUrl: 'http://server',
+    const api = new QesApi('https://server', 'tok', {
+      serverUrl: 'https://server',
       fetchImpl: (async () => jsonResponse({ data_to_sign: 'AAA=', hash_algorithm: 'sha256' })) as typeof fetch,
     });
 
@@ -42,8 +42,8 @@ describe('QesApi', () => {
   });
 
   it('maps 410 expired_token to a typed error', async () => {
-    const api = new QesApi('http://server', 'tok', {
-      serverUrl: 'http://server',
+    const api = new QesApi('https://server', 'tok', {
+      serverUrl: 'https://server',
       fetchImpl: (async () =>
         jsonResponse({ error: 'expired_token', message: 'expired' }, 410)) as typeof fetch,
     });
@@ -59,8 +59,8 @@ describe('QesApi', () => {
   });
 
   it('maps 422 qes_required_qscd to a typed error', async () => {
-    const api = new QesApi('http://server', 'tok', {
-      serverUrl: 'http://server',
+    const api = new QesApi('https://server', 'tok', {
+      serverUrl: 'https://server',
       fetchImpl: (async () =>
         jsonResponse({ error: 'qes_required_qscd', message: 'QES required' }, 422)) as typeof fetch,
     });

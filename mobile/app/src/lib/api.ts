@@ -1,4 +1,6 @@
 // Klient QES API (SPEC § 5): token je jen v paměti, nikdy se neukládá.
+import { signingOrigin } from './signingOrigin';
+
 import type {
   QesAppMetadata,
   QesCertificatePayload,
@@ -30,7 +32,7 @@ export class QesApi implements SessionSource {
   private readonly token: string;
 
   constructor(serverUrl: string, token: string, options: QesApiOptions = { serverUrl }) {
-    this.serverUrl = options.serverUrl.replace(/\/+$/, '');
+    this.serverUrl = signingOrigin(options.serverUrl);
     this.token = token;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -66,6 +68,7 @@ export class QesApi implements SessionSource {
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const response = await this.fetchImpl(`${this.serverUrl}${path}`, {
       method,
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
