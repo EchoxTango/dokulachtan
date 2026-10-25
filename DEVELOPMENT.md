@@ -100,6 +100,9 @@ v [docs/10-qes.md](docs/10-qes.md). Nejdůležitější:
 | `QES_PDF_MAX_BYTES`, `QES_SESSION_TTL` | limity uploadu a session |
 | `QES_ANDROID_CERT_SHA256`, `QES_IOS_TEAM_ID` | App Links pro konkrétní build |
 
+Výchozí trust roots v repu jsou PostSignum (`config/qes/postsignum.pem`) a testovací root.
+Pro iSignum/I.CA přidej její root do `QES_TRUST_ROOTS`.
+
 ## Fork
 
 Fork je větev `dokulachtan` v <https://github.com/v1b3coder/docuseal>, rebase na upstream
@@ -149,8 +152,8 @@ zůstává v gitu a v [docs/05](docs/05-e2e-testovani.md).
 
 - **SQLite flake** `spec/system/signing_form_spec.rb:1253` (2FA resend) — upstream flake závislý
   na pořadí; izolovaně projde. V `make qes-test` je to jediný failure.
-- **LTV na stagingu chybí** — CRL Distribution Point testovacích certů je `127.0.0.1:8765`,
-  takže staging hlásí `UNTRUSTED` (stejně jako dřív).
-- **Testovací APK na produkci** neotevře App Links (`QES_ANDROID_CERT_SHA256` není nastaveno)
-  a podpis testovacím certem skončí na `ltv_unavailable`.
+- **LTV v testovacím prostředí** — CRL Distribution Point testovacích certů je `127.0.0.1:8765`,
+  takže testovací prostředí hlásí `UNTRUSTED` (stejně jako dřív).
+- **APK z Releases** neotevře App Links, dokud v DocuSealu nenastavíš `QES_ANDROID_CERT_SHA256`
+  na jeho podpisový cert; podpis certem, který není v trust roots, skončí na `ltv_unavailable`.
 - **iOS build** čeká na Apple Developer účet; appka je cross-platform připravená.
