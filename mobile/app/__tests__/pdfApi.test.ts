@@ -117,7 +117,7 @@ describe('PdfApi', () => {
     expect(calls).toEqual(['POST http://server/s/abc/qes_sessions']);
   });
 
-  it('completes the submission and downloads the final PDF', async () => {
+  it('completes the submission and returns the final PDF URL', async () => {
     const calls: string[] = [];
     const bodies: (string | undefined)[] = [];
     const api = new PdfApi('http://server', 'secret', {
@@ -129,22 +129,17 @@ describe('PdfApi', () => {
           return jsonResponse({ documents: [{ name: 'contract', url: 'http://server/file/contract.pdf' }] });
         }
 
-        if (String(url).startsWith('http://server/file/')) {
-          return new Response(new Uint8Array([37, 80, 68, 70]), { status: 200 });
-        }
-
         return jsonResponse({});
       }) as typeof fetch,
     });
 
     await api.completeSubmission(11);
-    const bytes = await api.downloadDocument(11);
+    const url = await api.documentUrl(11);
 
-    expect(Array.from(bytes)).toEqual([37, 80, 68, 70]);
+    expect(url).toBe('http://server/file/contract.pdf');
     expect(calls).toEqual([
       'PUT http://server/api/submitters/11',
       'GET http://server/api/submitters/11',
-      'GET http://server/file/contract.pdf',
     ]);
 
     expect(bodies[0]).toBe('{"completed":true}');

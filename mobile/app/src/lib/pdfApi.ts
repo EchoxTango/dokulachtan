@@ -261,7 +261,8 @@ export class PdfApi {
   }
 
   // Finální PDF z DocuSealu (podepsané PDF, nikoli auditní stránka).
-  async downloadDocument(submitterId: number): Promise<Uint8Array> {
+  // Vrací podepsanou URL; soubor stahuje appka nativně (docs/15 § 7.1).
+  async documentUrl(submitterId: number): Promise<string> {
     const body = await this.request<{ documents: { name: string; url: string }[] }>(
       'GET',
       `/api/submitters/${submitterId}`,
@@ -273,13 +274,7 @@ export class PdfApi {
       throw new PdfApiError(404, 'document_missing');
     }
 
-    const response = await this.fetchImpl(url);
-
-    if (!response.ok) {
-      throw new PdfApiError(response.status, 'download_failed');
-    }
-
-    return new Uint8Array(await response.arrayBuffer());
+    return url;
   }
 
   private async postPdf<T>(path: string, file: PdfUpload): Promise<T> {

@@ -1,14 +1,25 @@
 // S4 Žádost o podpis (SPEC § 9.1): deep link → metadata → biometrie → podpis.
 import { useCallback, useEffect, useState } from 'react';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { QesApi, QesApiError } from '../src/lib/api';
 import { runSigningCeremony, CeremonyError } from '../src/lib/ceremony';
 import { VaultError } from '../src/lib/crypto/vault';
 import { levelLabel } from '../src/lib/level';
 import { PdfApi, PdfApiError, loadPdfApiSettings } from '../src/lib/pdfApi';
-import { sharePdf } from '../src/lib/pdfShare';
+import {
+  PdfActionError,
+  downloadPdf,
+  isPickerCancelled,
+  loadSaveFolder,
+  openPdf,
+  rememberSaveFolder,
+  savePdf,
+  sharePdf,
+  type SaveFolder,
+  type SavedPdf,
+} from '../src/lib/pdfShare';
 import { platformVaultDeps } from '../src/lib/platform';
 import type { QesSessionPayload } from '../src/lib/types';
 import { PrimaryButton, SecondaryButton, TextButton } from '../src/ui/buttons';
@@ -42,6 +53,13 @@ const ERROR_TEXT: Record<string, string> = {
   file_too_large: 'PDF je příliš velké (max 25 MB).',
   not_authenticated: 'Chybí API token. Nastavte ho v Nastavení.',
   rate_limited: 'Příliš mnoho požadavků. Zkuste to později.',
+  document_missing: 'Dokument v DocuSealu chybí. Zkuste to znovu.',
+  download_failed: 'Stažení PDF se nepodařilo. Zkuste to znovu.',
+  save_failed: 'Uložení PDF se nepodařilo. Zkuste to znovu.',
+  share_failed: 'Sdílení PDF se nepodařilo. Zkuste to znovu.',
+  sharing_unavailable: 'Sdílení není v tomto zařízení dostupné.',
+  open_failed: 'Otevření PDF se nepodařilo. Zkuste to znovu.',
+  no_pdf_viewer: 'V telefonu není aplikace pro zobrazení PDF.',
 };
 
 export default function SignScreen() {
@@ -56,9 +74,12 @@ export default function SignScreen() {
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [done, setDone] = useState<{ level: string; digest: string } | null>(null);
   const [signing, setSigning] = useState(false);
-  const [sharing, setSharing] = useState(false);
-  const [shared, setShared] = useState<string | null>(null);
-  const [shareError, setShareError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionDetail, setActionDetail] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedPdf | null>(null);
+  const [folder, setFolder] = useState<SaveFolder | null>(null);
 
   const isPdfFlow = flow === 'pdf';
   // Bez certifikátu nebo podepisujícího vede primární akce do wizardu S10 (docs/17).
@@ -106,6 +127,25 @@ export default function SignScreen() {
     }, []),
   );
 
+  // Po návratu ze share sheetu (back) musí být tlačítka zase použitelná, i kdyby
+  // systémový chooser nedoručil výsledek (docs/17).
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setBusy(false);
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // Zapamatovaná složka pro ukládání (Android SAF) — nabídne se příště.
+  useEffect(() => {
+    loadSaveFolder(platformVaultDeps().storage)
+      .then(setFolder)
+      .catch(() => setFolder(null));
+  }, []);
+
   const sign = useCallback(async () => {
     if (!token) {
       return;
@@ -141,25 +181,104 @@ export default function SignScreen() {
     }
   }, [token, serverUrl, session, isPdfFlow, submitterId, pdfApi]);
 
-  const shareFinalPdf = useCallback(async () => {
+  // Finální PDF stáhneme nativně do cache; obě akce (uložit / sdílet) jdou z něj.
+  const finalPdf = useCallback(async () => {
     if (!submitterId) {
+      throw new PdfActionError('download_failed');
+    }
+
+    const url = await (await pdfApi()).documentUrl(submitterId);
+    const name = `${(session?.document_name ?? 'document').replace(/\.pdf$/i, '')}-signed.pdf`;
+
+    return { file: await downloadPdf(url, name), name };
+  }, [submitterId, session, pdfApi]);
+
+  const failAction = useCallback((err: unknown) => {
+    if (err instanceof PdfActionError || err instanceof PdfApiError) {
+      setActionError(ERROR_TEXT[err.code] ?? err.code);
+    } else {
+      setActionError(ERROR_TEXT.network);
+    }
+
+    setActionDetail(err instanceof Error ? err.message : null);
+  }, []);
+
+  // „Stáhnout“ = uložit do telefonu (výchozí Downloads, nebo zapamatovaná složka).
+  const saveFinalPdf = useCallback(async (chooseFolder: boolean) => {
+    if (busy) {
       return;
     }
 
-    setSharing(true);
-    setShareError(null);
+    setBusy(true);
+    setActionError(null);
+    setActionDetail(null);
+    setNotice(null);
 
     try {
-      const bytes = await (await pdfApi()).downloadDocument(submitterId);
-      const name = session?.document_name ?? 'document';
+      const { file, name } = await finalPdf();
+      const result = await savePdf(file, name, { folder, chooseFolder });
+      const storage = platformVaultDeps().storage;
 
-      setShared(await sharePdf(bytes, `${name.replace(/\.pdf$/i, '')}-signed.pdf`));
+      setSaved(result);
+      setNotice(`Uloženo: ${result.label}`);
+
+      if (result.folder) {
+        if (result.folder.uri !== folder?.uri) {
+          setFolder(result.folder);
+          await rememberSaveFolder(storage, result.folder);
+        }
+      } else if (folder) {
+        // Zapamatovaná složka přestala platit → zpět na výchozí Downloads.
+        setFolder(null);
+        await rememberSaveFolder(storage, null);
+      }
     } catch (err) {
-      setShareError(err instanceof PdfApiError ? err.code : 'network');
+      if (!isPickerCancelled(err)) {
+        failAction(err);
+      }
     } finally {
-      setSharing(false);
+      setBusy(false);
     }
-  }, [submitterId, session, pdfApi]);
+  }, [busy, finalPdf, failAction, folder]);
+
+  // Otevření uloženého PDF v systémovém prohlížeči (Android).
+  const openSavedPdf = useCallback(async () => {
+    if (!saved) {
+      return;
+    }
+
+    setActionError(null);
+    setActionDetail(null);
+
+    try {
+      await openPdf(saved.uri);
+    } catch (err) {
+      failAction(err);
+    }
+  }, [saved, failAction]);
+
+  // „Sdílet“ = systémový share sheet; tlačítko se během sheetu neblokuje.
+  const shareFinalPdf = useCallback(async () => {
+    if (busy) {
+      return;
+    }
+
+    setBusy(true);
+    setActionError(null);
+    setActionDetail(null);
+    setNotice(null);
+
+    try {
+      const { file } = await finalPdf();
+
+      setBusy(false);
+      await sharePdf(file);
+    } catch (err) {
+      failAction(err);
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, finalPdf, failAction]);
 
   if (!session && !error) {
     return (
@@ -182,14 +301,26 @@ export default function SignScreen() {
           <Text style={styles.hash}>{done.digest}</Text>
           {isPdfFlow ? (
             <>
-              {shareError ? <Text style={styles.error}>{ERROR_TEXT[shareError] ?? shareError}</Text> : null}
-              {shared ? <Text style={styles.detail}>Uloženo: {shared}</Text> : null}
+              {actionError ? <Text style={styles.error}>{actionError}</Text> : null}
+              {actionDetail ? <Text style={styles.detail}>{actionDetail}</Text> : null}
+              {notice ? <Text style={styles.detail}>{notice}</Text> : null}
               <PrimaryButton
-                title={sharing ? 'Stahuji…' : 'Stáhnout a sdílet'}
-                onPress={shareFinalPdf}
-                disabled={sharing}
+                title={busy ? 'Stahuji…' : 'Stáhnout'}
+                onPress={() => saveFinalPdf(false)}
+                disabled={busy}
               />
-              <SecondaryButton title="Zavřít" onPress={() => router.replace('/')} />
+              <SecondaryButton title="Sdílet" onPress={shareFinalPdf} disabled={busy} />
+              {saved && Platform.OS === 'android' ? (
+                <SecondaryButton title="Otevřít" onPress={openSavedPdf} />
+              ) : null}
+              {Platform.OS === 'android' ? (
+                <TextButton
+                  title="Uložit jinam…"
+                  onPress={() => saveFinalPdf(true)}
+                  disabled={busy}
+                />
+              ) : null}
+              <TextButton title="Zavřít" onPress={() => router.replace('/')} />
             </>
           ) : (
             <PrimaryButton title="Zavřít" onPress={() => router.replace('/')} />
