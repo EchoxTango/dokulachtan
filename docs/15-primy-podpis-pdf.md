@@ -135,11 +135,13 @@ Chyby: `401 not_authenticated`, `404 disabled`, `422 invalid_pdf`, `422 encrypte
 | `app/_layout.tsx` | sdílené PDF: `expo-share-intent` → routa `/sign-pdf` s parametrem souboru |
 | `src/lib/shareIntent.ts` | PDF ze share intentu (`sharedPdfFile`), ostatní soubory ignoruje |
 | `plugins/withSharePdfTarget.js` | config plugin: Android `activity-alias` „Podepsat PDF“ pro `ACTION_SEND` `application/pdf` |
-| `src/lib/pdfApi.ts` | klient (`createDocument`, `setStampArea`, `createSubmission`, `startSession`, `completeSubmission`, `downloadDocument`, `user`), `stampArea`, mapování klepnutí |
-| `src/lib/pdfShare.ts` | zápis do cache + `expo-sharing` (`mimeType` pro Android, `UTI: com.adobe.pdf` pro iOS) |
-| `app/sign.tsx` | S13: po obřadu dokončí submission a nabídne „Stáhnout a sdílet“ |
+| `src/lib/pdfApi.ts` | klient (`createDocument`, `setStampArea`, `createSubmission`, `startSession`, `completeSubmission`, `documentUrl`, `user`), `stampArea`, mapování klepnutí |
+| `src/lib/pdfShare.ts` | stažení nativně do cache (`File.downloadFileAsync`), uložení do telefonu (`MediaStore` na Androidu 10+, SAF na starším Androidu, Files na iOS) a share sheet (vlastní modul na Androidu, `expo-sharing` na iOS) |
+| `modules/dokulachtan-share` | Android: chooser na hlavním vlákně + `saveToDownloads` přes `MediaStore` (bez promise visící po zavření sheetu) |
+| `app/sign.tsx` | S13: po obřadu dokončí submission a nabídne „Stáhnout“ (uložit do telefonu) a „Sdílet“ (share sheet) |
 | `app/settings.tsx` | Server URL + API token (SecureStore) |
 | `__tests__/pdfApi.test.ts` | Jest (upload, chyby, mapování souřadnic) |
+| `__tests__/pdfShare.test.ts` | Jest (stažení, uložení, share sheet, fallback) |
 | `__tests__/shareIntent.test.ts` | Jest (PDF ze share intentu, ignorování ne-PDF) |
 
 **Mapování klepnutí (SPEC § 9.9):** server vrací `pages[].width/height` v bodech a `stamp` v bodech; appka
@@ -156,6 +158,18 @@ volby QES (čtečka eObčanky je Android-only, SPEC § 9.4). Build čeká na App
 `expo-share-intent` přijme soubor a otevře `/sign-pdf` s parametrem souboru. `app/sign-pdf.tsx` po načtení
 nastavení a jména do pečeti **rovnou nahraje** sdílené PDF (bez ručního ukládání a hledání). Zdroj je v cache
 appky (`file://`), takže se nic nekopíruje do Documents; iOS share extension není v rozsahu.
+
+**Stažení, uložení a sdílení finálního PDF (docs/17):** finální PDF se stahuje nativně přes
+`File.downloadFileAsync` přímo do cache — ne přes `arrayBuffer`/`FileReader` v JS (velké PDF s LTV, CRL a DocTS
+tam dřív končilo jako „Chyba připojení“). Na Androidu 10+ jde „**Stáhnout**“ přes `MediaStore` do
+`Download/Dokulachtan/` (root Downloadu nejde v SAF vybrat, Android 11+ ho zakazuje), na starším Androidu přes
+SAF a na iOS přes výběr složky v aplikaci Soubory. „**Uložit jinam…**“ otevře SAF picker s naposledy použitou
+složkou a vybranou složku si zapamatuje (SecureStore) — další „Stáhnout“ už jde přímo tam. Po uložení se nabídne
+„**Otevřít**“ (Android `ACTION_VIEW` s `FLAG_GRANT_READ_URI_PERMISSION`). „**Sdílet**“ na Androidu otevírá vlastní
+modul `DokulachtanShare` na hlavním vlákně a promise resolve hned po otevření sheetu; `expo-sharing` tam startuje
+chooser z vlákna na pozadí, občas rejectuje NPE (`dispatchCancelPendingInputEvents`, expo/expo#51164) a jindy
+nechá promise po zavření sheetu viset (tlačítko zůstalo mrtvé). Na iOS zůstává `expo-sharing`. Po návratu ze
+sheetu se stav tlačítek resetuje (`AppState`), takže akce jde provést znovu.
 
 ## 7. Bezpečnost a soukromí
 
@@ -187,8 +201,11 @@ Smazáním dokumentu v UI zmizí i PDF — žádný vlastní úklid QES nad PDF 
 - **Negativní** `make qes-negative` (N1–N17): N10 bez tokenu → `401`; N11 ne-PDF → `422 invalid_pdf`;
   N12 příliš velké → `422 file_too_large`; N13 šifrované → `422 encrypted_pdf`; N14 už podepsané → `422 already_signed`;
   N15 nepodporovaná úroveň → `422 invalid_level`; N16 cizí API token → `403`; N17 druhé spuštění obřadu zruší první.
-- **Appka** `make qes-app-test` (48/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
+- **Appka** `make qes-app-test` (92/0) + `make qes-app-typecheck`; na emulátoru (Pixel Imprint + biometrie,
   lokální fork + `adb reverse`): výběr PDF → náhled → klepnutí → podpis → stažení a sdílení.
+- **Appka – uložení a sdílení** (2026-10-25): `__tests__/pdfShare.test.ts` (stažení do cache,
+  uložení do telefonu, share sheet, fallback, zrušení); na emulátoru uloženo do
+  `Download/Dokulachtan/`, share sheet otevřen a druhé sdílení i uložení po back funguje.
 - **Appka – sdílení** (Android, docs/15 § 6): sdílené PDF → S11 s vybraným souborem → rovnou upload →
   S12; ověřeno na emulátoru (share sheet „Podepsat PDF“, cold start i běžící appka).
 

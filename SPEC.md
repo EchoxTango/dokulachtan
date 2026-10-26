@@ -1131,8 +1131,10 @@ Pravidla:
 3. `PATCH /api/templates/:id` (oblast pole) → `POST /api/templates/:id/submissions` →
    `POST /s/:slug/qes_sessions` → token; appka pokračuje na S4 (dnešní obřad, § 9.3/§ 9.4).
 4. Po `completed` (S13) appka zavolá `PUT /api/submitters/:id` s `completed: true` (DocuSeal vygeneruje
-   finální PDF + auditní stránku) a pak `GET /api/submitters/:id` → PDF předá systémovému share sheetu
-   (`expo-sharing`) nebo uloží do souborů.
+   finální PDF + auditní stránku) a pak `GET /api/submitters/:id` → PDF se stáhne nativně do cache a nabídne
+   se **„Stáhnout“** (uložit do telefonu: `MediaStore` na Androidu 10+, SAF na starším Androidu, Files na iOS;
+   volitelně **„Uložit jinam…“** se zapamatovanou SAF složkou), **„Otevřít“** (systémový prohlížeč PDF) a
+   **„Sdílet“** (systémový share sheet; na Androidu vlastní modul na hlavním vlákně, na iOS `expo-sharing`).
 5. Mapování klepnutí: server vrací `pages[].width/height` v bodech; appka zobrazí náhled
    (`resizeMode: contain`) a zná zobrazený obdélník (`x0, y0, w, h`); `x = (tapX - x0) / w`,
    `y = (tapY - y0) / h`; `stampArea` z toho udělá oblast pole (`x`, `y` = levý horní roh pečeti,
