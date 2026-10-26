@@ -28,6 +28,22 @@ export function signingOrigin(value: string, dev = typeof __DEV__ !== 'undefined
   }
 }
 
+// `fetch` v React Native je `whatwg-fetch` nad XHR: `redirect: 'error'` ignoruje
+// a redirecty následuje. Origin odpovědi proto kontrolujeme sami — token se nesmí
+// poslat na cizí host ani po redirectu.
+export function isSameOrigin(url: string, origin: string): boolean {
+  const base = origin.replace(/\/+$/, '');
+
+  return url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`);
+}
+
+export function assertResponseOrigin(response: Response, origin: string): void {
+  // `new Response()` v testech má `url` prázdné; v RN je vždy `xhr.responseURL`.
+  if (response.url && !isSameOrigin(response.url, origin)) {
+    throw new SigningOriginError('foreign_server');
+  }
+}
+
 export async function resolveSigningOrigin(
   storage: PdfApiStorage,
   linkServer?: string,

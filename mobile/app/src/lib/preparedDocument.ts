@@ -32,12 +32,18 @@ export function verifyPreparedDocument(
   const prefix = binary.slice(0, firstLength);
   const gap = binary.slice(firstLength, secondStart);
   if (!binary.startsWith('%PDF-') || !/%%EOF\s*$/.test(binary)
-    || !/\/Contents\s*$/.test(prefix) || !/^<[\da-fA-F\s]+>$/.test(gap)) {
+    || !/^<[\da-fA-F\s]+>$/.test(gap)) {
     throw new Error('contents gap');
   }
-  // PDF smí obsahovat starší podpisy, ale tento rozsah musí být zapsaný v PDF.
-  const ranges = [...binary.matchAll(/\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/g)];
-  if (!ranges.some((match) => range.every((value, index) => value === Number(match[index + 1])))) {
+  // Šifrované PDF by se otevřelo s dotazem na heslo, takže by ho uživatel
+  // nemusel vidět; podepsat ho nesmíme.
+  if (/\/Encrypt\s+\d+\s+\d+\s+R/.test(binary)) {
+    throw new Error('encrypted');
+  }
+  // `/ByteRange` musí být zapsaný hned před mezerou `/Contents`, ne kdekoliv
+  // v souboru — jinak by šlo podstrčit rozsah z jiného (i podepsaného) objektu.
+  const embedded = prefix.match(/\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]\s*\/Contents\s*$/);
+  if (!embedded || !range.every((value, index) => value === Number(embedded[index + 1]))) {
     throw new Error('embedded byte range');
   }
 

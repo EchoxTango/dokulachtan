@@ -9,7 +9,11 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ token: 'tok' }), useFocusEffect: () => {}, router: { replace: jest.fn() },
 }));
 jest.mock('../src/lib/platform', () => ({ platformVaultDeps: () => ({ storage: {} }) }));
-jest.mock('../src/lib/pdfShare', () => ({ sharePdf: jest.fn(), previewPdf: jest.fn() }));
+jest.mock('../src/lib/pdfShare', () => ({
+  ...jest.requireActual('../src/lib/pdfShare'),
+  sharePdf: jest.fn(),
+  previewPdf: jest.fn(),
+}));
 jest.mock('../src/lib/signingOrigin', () => ({
   ...jest.requireActual('../src/lib/signingOrigin'), resolveSigningOrigin: async () => 'https://server',
 }));

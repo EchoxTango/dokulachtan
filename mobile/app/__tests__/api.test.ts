@@ -78,7 +78,7 @@ describe('QesApi', () => {
   });
 });
 
-it('downloads the exact prepared PDF without following redirects', async () => {
+it('downloads the exact prepared PDF from the configured server', async () => {
   const bytes = new Uint8Array([37, 80, 68, 70, 45, 255, 0]);
   const fetchImpl = jest.fn().mockResolvedValue(new Response(bytes, {
     headers: { 'Content-Type': 'application/pdf' },
@@ -86,7 +86,28 @@ it('downloads the exact prepared PDF without following redirects', async () => {
   const api = new QesApi('https://server', 'a/b', { serverUrl: 'https://server', fetchImpl });
   expect(await api.getDocument()).toEqual(bytes);
   expect(fetchImpl).toHaveBeenCalledWith('https://server/qes/sessions/a%2Fb/document',
-    expect.objectContaining({ redirect: 'error', headers: expect.objectContaining({ Accept: 'application/pdf' }) }));
+    expect.objectContaining({ headers: expect.objectContaining({ Accept: 'application/pdf' }) }));
+});
+
+it('rejects a document response redirected to a foreign host', async () => {
+  const bytes = new Uint8Array([37, 80, 68, 70]);
+  const fetchImpl = jest.fn().mockImplementation(async () => {
+    const response = new Response(bytes, { headers: { 'Content-Type': 'application/pdf' } });
+    Object.defineProperty(response, 'url', { value: 'https://attacker.test/qes/sessions/a/document' });
+    return response;
+  });
+  const api = new QesApi('https://server', 'a', { serverUrl: 'https://server', fetchImpl });
+  await expect(api.getDocument()).rejects.toMatchObject({ code: 'foreign_server' });
+});
+
+it('rejects a JSON response redirected to a foreign host', async () => {
+  const fetchImpl = jest.fn().mockImplementation(async () => {
+    const response = jsonResponse({ state: 'app_opened' });
+    Object.defineProperty(response, 'url', { value: 'https://attacker.test/qes/sessions/a' });
+    return response;
+  });
+  const api = new QesApi('https://server', 'a', { serverUrl: 'https://server', fetchImpl });
+  await expect(api.getSession()).rejects.toMatchObject({ code: 'foreign_server' });
 });
 
 it('rejects a document response with the wrong media type', async () => {

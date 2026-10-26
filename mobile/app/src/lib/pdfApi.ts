@@ -1,6 +1,7 @@
 // API přímého podpisu PDF (docs/15 § 5): appka nahrává PDF přes DocuSeal API
 // a používá standardní tok — šablona s polem `qes`, submission a běžný obřad.
 // API token je v SecureStore (nastavení), nikdy se neloguje.
+import { assertResponseOrigin, signingOrigin } from './signingOrigin';
 import type { QesLevel } from './types';
 
 export const PDF_API_SETTINGS_KEY = 'cz.dokulachtan.signer.api';
@@ -166,7 +167,7 @@ export class PdfApi {
   private readonly fetchImpl: typeof fetch;
 
   constructor(serverUrl: string, apiToken: string, options: PdfApiOptions = {}) {
-    this.serverUrl = serverUrl.replace(/\/+$/, '');
+    this.serverUrl = signingOrigin(serverUrl);
     this.apiToken = apiToken;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
@@ -316,6 +317,8 @@ export class PdfApi {
       headers: form ? this.headers() : { ...this.headers(), 'Content-Type': 'application/json' },
       body: encoded,
     });
+
+    assertResponseOrigin(response, this.serverUrl);
 
     if (!response.ok) {
       await throwError(response);

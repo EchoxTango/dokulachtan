@@ -28,10 +28,11 @@ jest.mock('react-native', () => ({ Platform: { OS: 'android', Version: 36 } }));
 
 jest.mock('../modules/dokulachtan-open-pdf', () => ({ openPdf: jest.fn() }));
 
+const mockWrite = jest.fn();
+
 jest.mock('expo-file-system', () => {
   const downloadFileAsync = jest.fn();
   const pickDirectoryAsync = jest.fn();
-  const write = jest.fn();
   const create = jest.fn();
   const bytes = jest.fn();
 
@@ -44,7 +45,7 @@ jest.mock('expo-file-system', () => {
 
     static downloadFileAsync = downloadFileAsync;
 
-    write = write;
+    write = mockWrite;
 
     create = create;
 
@@ -63,6 +64,8 @@ jest.mock('expo-file-system', () => {
     }
 
     static pickDirectoryAsync = pickDirectoryAsync;
+
+    create = jest.fn();
   }
 
   return { File: MockFile, Directory: MockDirectory, Paths: { cache: { uri: 'file:///cache/' } } };
@@ -338,7 +341,7 @@ describe('pdfShare', () => {
 
     await previewPdf(bytes);
 
-    expect(write).toHaveBeenCalledWith(bytes);
+    expect(mockWrite).toHaveBeenCalledWith(bytes);
     expect(reviewedOpen).toHaveBeenCalledWith(expect.any(String));
   });
 
