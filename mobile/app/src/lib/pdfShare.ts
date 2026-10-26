@@ -8,9 +8,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
-// Náhled před podpisem otevírá striktně jen soubor z `reviewed-pdf` (docs/16 S12),
-// proto vlastní modul; uložené PDF otevírá `openPdf` níž.
-import { openPdf as openReviewedPdf } from '../../modules/dokulachtan-open-pdf';
+// Náhled před podpisem i otevření po podpisu jdou stejnou cestou (docs/16 S12):
+// chooser nechává na systému, takže nabídka aplikací je v obou případech stejná.
 
 import {
   isNativeShareAvailable,
@@ -266,13 +265,6 @@ export async function previewPdf(bytes: Uint8Array): Promise<void> {
     return;
   }
 
-  try {
-    await openReviewedPdf(file.uri);
-  } catch (err) {
-    // Modul hlásí `pdf_viewer_unavailable`, když v systému není prohlížeč PDF.
-    throw new PdfActionError(
-      err instanceof Error && err.message === 'pdf_viewer_unavailable' ? 'no_pdf_viewer' : 'open_failed',
-      err instanceof Error ? err.message : undefined,
-    );
-  }
+  // Stejná cesta jako otevření po podpisu — jeden `openPdf` pro obě místa.
+  await openPdf(file.uri);
 }

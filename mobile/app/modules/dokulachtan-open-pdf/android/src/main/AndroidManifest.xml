@@ -5,12 +5,4 @@
       <data android:mimeType="application/pdf" />
     </intent>
   </queries>
-  <application>
-    <provider android:name="androidx.core.content.FileProvider"
-      android:authorities="${applicationId}.reviewedpdf"
-      android:exported="false" android:grantUriPermissions="true">
-      <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
-        android:resource="@xml/reviewed_pdf_paths" />
-    </provider>
-  </application>
 </manifest>

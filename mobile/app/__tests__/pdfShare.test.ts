@@ -9,7 +9,6 @@ import {
   saveToDownloads,
   sharePdf as nativeSharePdf,
 } from '../modules/dokulachtan-share';
-import { openPdf as openReviewedPdf } from '../modules/dokulachtan-open-pdf';
 import {
   downloadPdf,
   isPickerCancelled,
@@ -25,8 +24,6 @@ import {
 } from '../src/lib/pdfShare';
 
 jest.mock('react-native', () => ({ Platform: { OS: 'android', Version: 36 } }));
-
-jest.mock('../modules/dokulachtan-open-pdf', () => ({ openPdf: jest.fn() }));
 
 const mockWrite = jest.fn();
 
@@ -99,7 +96,6 @@ const nativeAvailable = jest.mocked(isNativeShareAvailable);
 const nativeSave = jest.mocked(saveToDownloads);
 const nativeShare = jest.mocked(nativeSharePdf);
 const nativeOpen = jest.mocked(nativeOpenPdf);
-const reviewedOpen = jest.mocked(openReviewedPdf);
 const platform = Platform as { OS: string; Version: number | string };
 
 function file(uri: string, bytes = new Uint8Array([37, 80, 68, 70])): File {
@@ -337,16 +333,16 @@ describe('pdfShare', () => {
     const bytes = new Uint8Array([37, 80, 68, 70, 45, 255, 0]);
 
     platform.OS = 'android';
-    reviewedOpen.mockResolvedValue(undefined);
+    nativeOpen.mockResolvedValue(undefined);
 
     await previewPdf(bytes);
 
     expect(mockWrite).toHaveBeenCalledWith(bytes);
-    expect(reviewedOpen).toHaveBeenCalledWith(expect.any(String));
+    expect(nativeOpen).toHaveBeenCalledWith(expect.any(String), 'application/pdf');
   });
 
   it('maps a missing PDF viewer to no_pdf_viewer', async () => {
-    reviewedOpen.mockRejectedValue(new Error('pdf_viewer_unavailable'));
+    nativeOpen.mockRejectedValue(Object.assign(new Error('No activity found'), { code: 'ERR_NO_PDF_VIEWER' }));
 
     await expect(previewPdf(new Uint8Array([1]))).rejects.toMatchObject({ code: 'no_pdf_viewer' });
   });
